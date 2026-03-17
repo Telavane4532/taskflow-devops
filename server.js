@@ -24,4 +24,9 @@ app.patch('/tasks/:id/done', (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`TaskFlow running on port ${PORT}`));
+
+if (require.main === module) {
+  app.listen(PORT, () => console.log(`TaskFlow running on port ${PORT}`));
+}
+
+module.exports = app;
