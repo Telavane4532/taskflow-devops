@@ -1,4 +1,5 @@
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from rest_framework import permissions, status
 from rest_framework.response import Response
@@ -42,15 +43,17 @@ class SummarizeView(APIView, QuotaMixin):
         task_id = serializer.validated_data.get("task_id")
         text = serializer.validated_data.get("text")
         task = None
-        if task_id:
-            task = Task.objects.get(id=task_id, project__owner=request.user)
-            text = f"{task.title}\n{task.description}"
-        if not text:
-            return Response({"error": "text or task_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
+            if task_id:
+                task = Task.objects.get(id=task_id, project__owner=request.user)
+                text = f"{task.title}\n{task.description}"
+            if not text:
+                return Response({"error": "text or task_id is required"}, status=status.HTTP_400_BAD_REQUEST)
             summary = summarize(request.user, text)
-        except ModerationError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+        except ModerationError:
+            return Response({"error": "Input blocked by moderation policy"}, status=status.HTTP_400_BAD_REQUEST)
         if task:
             task.ai_summary = summary
             task.save(update_fields=["ai_summary", "updated_at"])
@@ -73,15 +76,17 @@ class PrioritizeView(APIView, QuotaMixin):
         title = serializer.validated_data.get("title")
         description = serializer.validated_data.get("description", "")
         task = None
-        if task_id:
-            task = Task.objects.get(id=task_id, project__owner=request.user)
-            title, description = task.title, task.description
-        if not title:
-            return Response({"error": "title or task_id is required"}, status=status.HTTP_400_BAD_REQUEST)
         try:
+            if task_id:
+                task = Task.objects.get(id=task_id, project__owner=request.user)
+                title, description = task.title, task.description
+            if not title:
+                return Response({"error": "title or task_id is required"}, status=status.HTTP_400_BAD_REQUEST)
             score = prioritize(request.user, title, description)
-        except ModerationError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
+        except ModerationError:
+            return Response({"error": "Input blocked by moderation policy"}, status=status.HTTP_400_BAD_REQUEST)
         if task:
             task.priority_score = score
             task.save(update_fields=["priority_score", "updated_at"])
@@ -102,8 +107,8 @@ class ParseTaskView(APIView, QuotaMixin):
         serializer.is_valid(raise_exception=True)
         try:
             data = parse_task(request.user, serializer.validated_data["text"])
-        except ModerationError as exc:
-            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except ModerationError:
+            return Response({"error": "Input blocked by moderation policy"}, status=status.HTTP_400_BAD_REQUEST)
         return Response(data)
 
 
@@ -121,9 +126,12 @@ class SimilarTasksView(APIView, QuotaMixin):
         serializer.is_valid(raise_exception=True)
         top_k = serializer.validated_data["top_k"]
 
-        task = Task.objects.get(id=task_id, project__owner=request.user)
-        upsert_embedding(task)
-        source = TaskEmbedding.objects.get(task=task)
+        try:
+            task = Task.objects.get(id=task_id, project__owner=request.user)
+            upsert_embedding(task)
+            source = TaskEmbedding.objects.get(task=task)
+        except ObjectDoesNotExist:
+            return Response({"error": "Task not found"}, status=status.HTTP_404_NOT_FOUND)
 
         candidates = TaskEmbedding.objects.filter(task__project__owner=request.user).exclude(task=task).select_related("task")
         ranked = []

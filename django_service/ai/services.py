@@ -1,7 +1,7 @@
 import logging
+import re
 from math import sqrt
 
-from django.conf import settings
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from .models import AIRequestLog, TaskEmbedding
@@ -9,7 +9,7 @@ from .providers import DummyProvider
 
 logger = logging.getLogger(__name__)
 
-BANNED_TERMS = {"hack", "exploit malware", "kill"}
+BANNED_TERMS = {"hack", "exploit", "malware", "kill"}
 
 
 class ModerationError(ValueError):
@@ -20,8 +20,9 @@ def assert_safe_prompt(text: str):
     if len(text) > 5000:
         raise ModerationError("Input too long")
     lower = text.lower()
-    if any(term in lower for term in BANNED_TERMS):
-        raise ModerationError("Input blocked by moderation policy")
+    for term in BANNED_TERMS:
+        if re.search(rf"\b{re.escape(term)}\b", lower):
+            raise ModerationError("Input blocked by moderation policy")
 
 
 def provider():
