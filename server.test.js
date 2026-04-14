@@ -49,5 +49,5 @@ test('POST /ai/recommendations supports direct skill input and returns skill gap
 test('POST /ai/recommendations returns 400 for empty payload', async () => {
   const res = await request(app).post('/ai/recommendations').send({});
   expect(res.statusCode).toBe(400);
-  expect(res.body.error).toContain('Provide resumeText or skills');
+  expect(res.body.error).toBe('Provide resumeText or skills with at least one recognizable skill');
 });

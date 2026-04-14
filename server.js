@@ -146,7 +146,7 @@ function buildSkillGapSummary(recommendations) {
 
 function getCandidateSkills(inputSkills, resumeText) {
   const normalizedInputSkills = Array.isArray(inputSkills)
-    ? inputSkills.map(normalizeSkill).filter(Boolean)
+    ? inputSkills.map(normalizeSkill).filter(skill => skill !== null)
     : [];
 
   const resumeSkills = extractSkillsFromResume(resumeText);
